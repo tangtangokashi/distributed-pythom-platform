@@ -1,0 +1,30 @@
+version: "3.8"
+
+# Initialize with `docker swarm init` on server 1, then deploy using:
+# docker stack deploy -c deploy/swarm-stack.yml decision
+services:
+  web:
+    image: YOUR_REGISTRY/distributed-decision-platform:latest
+    environment:
+      DATABASE_URL: postgresql+psycopg://platform:platform@postgres:5432/platform
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
+    ports: ["8080:8080"]
+    deploy:
+      placement:
+        constraints: [node.labels.role == control]
+  spark-worker:
+    image: bitnami/spark:3.5
+    environment:
+      SPARK_MODE: worker
+      SPARK_MASTER_URL: spark://spark-master:7077
+    deploy:
+      mode: global
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: platform
+      POSTGRES_USER: platform
+      POSTGRES_PASSWORD: CHANGE_ME
+    deploy:
+      placement:
+        constraints: [node.labels.role == control]
