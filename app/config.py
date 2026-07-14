@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     simulation_interval_seconds: float = 1.0
     simulation_autostart: bool = True
     kafka_bootstrap_servers: str = "localhost:9092"
+    auth_secret: str = "change-this-secret-before-production"
+    auth_access_token_minutes: int = 1440
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

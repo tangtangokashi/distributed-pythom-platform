@@ -18,11 +18,11 @@ services:
       DATABASE_URL: postgresql+psycopg://platform:platform@postgres:5432/platform
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SIMULATION_AUTOSTART: "true"
+      AUTH_SECRET: ${AUTH_SECRET:-local-docker-demo-secret-change-in-production}
+      AUTH_ACCESS_TOKEN_MINUTES: ${AUTH_ACCESS_TOKEN_MINUTES:-1440}
     depends_on:
       postgres:
         condition: service_healthy
-      kafka:
-        condition: service_started
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"]
       interval: 10s
@@ -48,41 +48,55 @@ services:
 
   redis:
     image: redis:7-alpine
+    profiles: ["distributed"]
     command: redis-server --appendonly yes
     volumes:
       - redis-data:/data
     restart: unless-stopped
 
   kafka:
-    image: bitnami/kafka:3.8
+    image: apache/kafka:3.8.0
+    profiles: ["distributed"]
     environment:
-      KAFKA_CFG_NODE_ID: 1
-      KAFKA_CFG_PROCESS_ROLES: broker,controller
-      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
-      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
-      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
-      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
-      ALLOW_PLAINTEXT_LISTENER: "yes"
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
     restart: unless-stopped
 
   spark-master:
-    image: bitnami/spark:3.5
-    environment:
-      SPARK_MODE: master
-      SPARK_MASTER_WEBUI_PORT: 8081
+    image: apache/spark:3.5.3
+    profiles: ["distributed"]
+    command:
+      - /opt/spark/bin/spark-class
+      - org.apache.spark.deploy.master.Master
+      - --host
+      - spark-master
+      - --port
+      - "7077"
+      - --webui-port
+      - "8081"
     ports:
       - "8081:8081"
     restart: unless-stopped
 
   spark-worker:
-    image: bitnami/spark:3.5
-    environment:
-      SPARK_MODE: worker
-      SPARK_MASTER_URL: spark://spark-master:7077
-      SPARK_WORKER_MEMORY: 1G
-      SPARK_WORKER_CORES: 1
+    image: apache/spark:3.5.3
+    profiles: ["distributed"]
+    command:
+      - /opt/spark/bin/spark-class
+      - org.apache.spark.deploy.worker.Worker
+      - spark://spark-master:7077
+      - --cores
+      - "1"
+      - --memory
+      - 1G
     depends_on:
       - spark-master
     restart: unless-stopped

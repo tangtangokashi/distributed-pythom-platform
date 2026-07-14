@@ -20,13 +20,23 @@ npm run dev
 
 浏览器访问 <http://127.0.0.1:5173>，接口文档访问 <http://127.0.0.1:8080/docs>。默认使用本地 SQLite；如需 DeepSeek，请在 `.env` 中填入 `DEEPSEEK_API_KEY`。
 
+首次打开网页时创建账户即可登录。密码仅保存 PBKDF2-SHA256 加盐哈希；生产部署前必须通过 `AUTH_SECRET` 配置一个足够长的随机令牌签名密钥。
+
 ### Docker 单机演示
 
 ```powershell
 docker compose up --build
 ```
 
-这会启动 Vue/Nginx、FastAPI、PostgreSQL、Redis、Kafka、Spark Master 和 Spark Worker。启动完成后访问 <http://127.0.0.1:8080>；FastAPI 接口文档位于 <http://127.0.0.1:8000/docs>，Spark 管理页面位于 <http://127.0.0.1:8081>。容器内网页服务使用 PostgreSQL；本地不使用 Docker 时则自动回退到 SQLite。`streaming/spark_job.py` 是接入三节点 Kafka 后可提交的 PySpark Structured Streaming 聚合任务。
+默认会启动 Vue/Nginx、FastAPI 和 PostgreSQL，足以运行网页、登录注册、实时模拟和机器学习推理。启动完成后访问 <http://127.0.0.1:8080>；FastAPI 接口文档位于 <http://127.0.0.1:8000/docs>。容器内网页服务使用 PostgreSQL；本地不使用 Docker 时则自动回退到 SQLite。
+
+如需同时启动 Redis、Kafka、Spark Master 和 Spark Worker，使用可选的分布式配置：
+
+```powershell
+docker compose --profile distributed up --build
+```
+
+此时 Spark 管理页面位于 <http://127.0.0.1:8081>。`streaming/spark_job.py` 是接入 Kafka 后可提交的 PySpark Structured Streaming 聚合任务。
 
 后台运行和停止：
 

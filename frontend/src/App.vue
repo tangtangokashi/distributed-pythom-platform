@@ -1,7 +1,8 @@
 <script setup>
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref } from 'vue'
-import { platformApi } from './api'
+import { clearToken, getToken, platformApi } from './api'
 import { useDeviceCapability } from './composables/useDeviceCapability'
+import AuthGate from './components/AuthGate.vue'
 
 const ClusterTwin = defineAsyncComponent(() => import('./components/three/ClusterTwin.vue'))
 const FinanceTerrain = defineAsyncComponent(() => import('./components/three/FinanceTerrain.vue'))
@@ -29,9 +30,12 @@ const models = ref([])
 const question = ref('')
 const answer = ref('你好，我可以根据当前聚合指标解释风险信号，并给出运营建议。')
 const asking = ref(false)
+const authChecked = ref(false)
+const currentUser = ref(null)
 const showThree = ref(true)
 const { desktop, reducedMotion, webgl } = useDeviceCapability()
 const canRenderThree = computed(() => desktop.value && webgl.value && showThree.value)
+const userInitials = computed(() => currentUser.value?.name?.slice(0, 2).toUpperCase() || '用户')
 let timer
 
 const meta = computed(() => pageMeta[active.value])
@@ -82,21 +86,38 @@ async function ask(text = question.value) {
   finally { asking.value = false }
 }
 function switchPage(id) { active.value = id; mobileOpen.value = false; window.scrollTo({ top: 0, behavior: 'smooth' }) }
-onMounted(async () => { await Promise.all([refresh(), loadModels()]); timer = setInterval(refresh, 2500) })
-onBeforeUnmount(() => clearInterval(timer))
+async function startSession(user) {
+  currentUser.value = user
+  loading.value = true
+  await Promise.all([refresh(), loadModels()])
+  clearInterval(timer)
+  timer = setInterval(refresh, 2500)
+}
+async function restoreSession() {
+  if (!getToken()) { authChecked.value = true; return }
+  try { await startSession(await platformApi.me()) }
+  catch { clearToken(); currentUser.value = null }
+  finally { authChecked.value = true }
+}
+function logout() { clearToken(); currentUser.value = null; dashboard.value = null; models.value = []; clearInterval(timer) }
+function expireSession() { currentUser.value = null; dashboard.value = null; clearInterval(timer) }
+onMounted(() => { window.addEventListener('auth-expired', expireSession); restoreSession() })
+onBeforeUnmount(() => { clearInterval(timer); window.removeEventListener('auth-expired', expireSession) })
 </script>
 
 <template>
-  <div class="app-shell">
+  <div v-if="!authChecked" class="auth-boot"><div class="brand-mark"><i></i><i></i><i></i></div><p>正在恢复登录状态…</p></div>
+  <AuthGate v-else-if="!currentUser" @authenticated="startSession" />
+  <div v-else class="app-shell">
     <aside :class="['sidebar', { open: mobileOpen }]">
       <div class="brand"><div class="brand-mark"><i></i><i></i><i></i></div><div><strong>DataPulse</strong><small>智能决策平台</small></div></div>
       <nav><p class="nav-caption">工作台</p><button v-for="item in navItems" :key="item[0]" :class="['nav-link', { active: active === item[0] }]" @click="switchPage(item[0])"><b>{{ item[2] }}</b><span>{{ item[1] }}</span><i v-if="item[0] === 'overview' && alerts.length">{{ alerts.length }}</i></button></nav>
-      <div class="sidebar-foot"><div class="environment"><div><i></i><strong>演示环境</strong></div><p>当前为本地模拟数据，集群指标仅用于界面展示。</p></div><div class="profile"><span>DA</span><div><strong>数据分析员</strong><small>平台管理员</small></div><b>•••</b></div></div>
+      <div class="sidebar-foot"><div class="environment"><div><i></i><strong>演示环境</strong></div><p>当前为本地模拟数据，集群指标仅用于界面展示。</p></div><div class="profile"><span>{{ userInitials }}</span><div><strong>{{ currentUser.name }}</strong><small>{{ currentUser.email }}</small></div><button class="logout-button" title="退出登录" @click="logout">退出</button></div></div>
     </aside>
     <div v-if="mobileOpen" class="scrim" @click="mobileOpen = false"></div>
 
     <main>
-      <header class="topbar"><button class="menu" @click="mobileOpen = true">☰</button><div class="breadcrumb"><span>智能决策平台</span><b>/</b><strong>{{ meta[0] }}</strong></div><div class="top-actions"><span :class="['connection', { offline: !connected }]"><i></i>{{ connected ? '数据已连接' : '等待连接' }}</span><button class="bell">◌<i v-if="alerts.length"></i></button><span class="avatar">DA</span></div></header>
+      <header class="topbar"><button class="menu" @click="mobileOpen = true">☰</button><div class="breadcrumb"><span>智能决策平台</span><b>/</b><strong>{{ meta[0] }}</strong></div><div class="top-actions"><span :class="['connection', { offline: !connected }]"><i></i>{{ connected ? '数据已连接' : '等待连接' }}</span><button class="bell">◌<i v-if="alerts.length"></i></button><span class="avatar" :title="currentUser.email">{{ userInitials }}</span></div></header>
       <div class="content">
         <section class="page-heading"><div><span>今日实时数据</span><h1>{{ meta[0] }}</h1><p>{{ meta[1] }}</p></div><div><button v-if="['overview','finance','ecommerce'].includes(active) && desktop && webgl" class="view-toggle" @click="showThree = !showThree">{{ showThree ? '切换二维视图' : '开启三维视图' }}</button><span class="live"><i></i>实时更新</span><time>{{ new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' }) }}</time></div></section>
         <div v-if="error" class="banner"><b>!</b>{{ error }}<button @click="refresh">重新连接</button></div>
