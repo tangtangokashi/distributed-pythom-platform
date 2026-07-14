@@ -1,16 +1,35 @@
 services:
-  web:
-    build: .
+  frontend:
+    build:
+      context: ./frontend
     ports:
-      - "8080:8080"
+      - "8080:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+    ports:
+      - "8000:8000"
     environment:
       DATABASE_URL: postgresql+psycopg://platform:platform@postgres:5432/platform
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SIMULATION_AUTOSTART: "true"
     depends_on:
       postgres:
         condition: service_healthy
       kafka:
         condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
 
   postgres:
     image: postgres:16-alpine
@@ -25,12 +44,14 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
     command: redis-server --appendonly yes
     volumes:
       - redis-data:/data
+    restart: unless-stopped
 
   kafka:
     image: bitnami/kafka:3.8
@@ -44,6 +65,7 @@ services:
       KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
       ALLOW_PLAINTEXT_LISTENER: "yes"
+    restart: unless-stopped
 
   spark-master:
     image: bitnami/spark:3.5
@@ -52,6 +74,7 @@ services:
       SPARK_MASTER_WEBUI_PORT: 8081
     ports:
       - "8081:8081"
+    restart: unless-stopped
 
   spark-worker:
     image: bitnami/spark:3.5
@@ -62,8 +85,8 @@ services:
       SPARK_WORKER_CORES: 1
     depends_on:
       - spark-master
+    restart: unless-stopped
 
 volumes:
   postgres-data:
   redis-data:
-

@@ -1,0 +1,12 @@
+.git
+.gitignore
+.idea
+.venv
+__pycache__
+*.py[cod]
+*.db
+.env
+frontend
+data
+dist
+*.log
