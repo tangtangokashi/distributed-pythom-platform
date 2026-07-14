@@ -1,6 +1,11 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref } from 'vue'
 import { platformApi } from './api'
+import { useDeviceCapability } from './composables/useDeviceCapability'
+
+const ClusterTwin = defineAsyncComponent(() => import('./components/three/ClusterTwin.vue'))
+const FinanceTerrain = defineAsyncComponent(() => import('./components/three/FinanceTerrain.vue'))
+const CommerceWorld = defineAsyncComponent(() => import('./components/three/CommerceWorld.vue'))
 
 const navItems = [
   ['overview', '运营总览', '▦'], ['finance', '金融风险', '⌁'],
@@ -24,6 +29,9 @@ const models = ref([])
 const question = ref('')
 const answer = ref('你好，我可以根据当前聚合指标解释风险信号，并给出运营建议。')
 const asking = ref(false)
+const showThree = ref(true)
+const { desktop, reducedMotion, webgl } = useDeviceCapability()
+const canRenderThree = computed(() => desktop.value && webgl.value && showThree.value)
 let timer
 
 const meta = computed(() => pageMeta[active.value])
@@ -90,7 +98,7 @@ onBeforeUnmount(() => clearInterval(timer))
     <main>
       <header class="topbar"><button class="menu" @click="mobileOpen = true">☰</button><div class="breadcrumb"><span>智能决策平台</span><b>/</b><strong>{{ meta[0] }}</strong></div><div class="top-actions"><span :class="['connection', { offline: !connected }]"><i></i>{{ connected ? '数据已连接' : '等待连接' }}</span><button class="bell">◌<i v-if="alerts.length"></i></button><span class="avatar">DA</span></div></header>
       <div class="content">
-        <section class="page-heading"><div><span>今日实时数据</span><h1>{{ meta[0] }}</h1><p>{{ meta[1] }}</p></div><div><span class="live"><i></i>实时更新</span><time>{{ new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' }) }}</time></div></section>
+        <section class="page-heading"><div><span>今日实时数据</span><h1>{{ meta[0] }}</h1><p>{{ meta[1] }}</p></div><div><button v-if="['overview','finance','ecommerce'].includes(active) && desktop && webgl" class="view-toggle" @click="showThree = !showThree">{{ showThree ? '切换二维视图' : '开启三维视图' }}</button><span class="live"><i></i>实时更新</span><time>{{ new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' }) }}</time></div></section>
         <div v-if="error" class="banner"><b>!</b>{{ error }}<button @click="refresh">重新连接</button></div>
         <div v-if="loading" class="loading"><i></i><p>正在加载业务数据…</p></div>
 
@@ -101,6 +109,7 @@ onBeforeUnmount(() => clearInterval(timer))
             <article><div><span class="metric-icon green">人</span><em>活跃</em></div><p>活跃用户</p><h2>{{ kpis.active_users || 0 }}</h2><small>近实时估算</small></article>
             <article class="risk"><div><span class="metric-icon red">!</span><em>需关注</em></div><p>风险告警</p><h2>{{ kpis.alerts || 0 }}</h2><small>最近检测结果</small></article>
           </section>
+          <ClusterTwin v-if="canRenderThree" :nodes="nodes" :stream="stream" :connected="connected" :reduced-motion="reducedMotion" />
           <section class="grid main-grid">
             <article class="panel chart-panel"><div class="panel-head"><div><h3>市场走势</h3><p>核心标的实时价格变化</p></div><div class="legend"><span>AAPL</span><span>TSLA</span><span>NVDA</span></div></div><div class="chart"><svg viewBox="0 0 100 100" preserveAspectRatio="none"><g><line x1="0" y1="20" x2="100" y2="20"/><line x1="0" y1="52" x2="100" y2="52"/><line x1="0" y1="84" x2="100" y2="84"/></g><polyline v-for="line in chartLines" :key="line.symbol" :class="line.symbol.toLowerCase()" :points="line.points" fill="none" vector-effect="non-scaling-stroke"/></svg></div><div class="chart-foot"><span>较早</span><span>实时价格流</span><span>现在</span></div></article>
             <article class="panel"><div class="panel-head"><div><h3>计算资源</h3><p>三节点演示集群</p></div><span class="badge">模拟状态</span></div><div class="node-list"><div v-for="node in nodes" :key="node.name" class="node"><span>{{ node.name.includes('1') ? '主' : '算' }}</span><div><strong>{{ node.name }}</strong><small>{{ node.role }}</small></div><em><i></i>正常</em></div></div><div class="stream"><div><small>模拟消息</small><strong>{{ (stream.kafka_messages || 0).toLocaleString() }}</strong></div><div><small>处理延迟</small><strong>{{ stream.spark_latency || 0 }} ms</strong></div></div></article>
@@ -113,11 +122,13 @@ onBeforeUnmount(() => clearInterval(timer))
 
         <template v-else-if="active === 'finance'">
           <section class="stock-grid"><article v-for="stock in latestStocks" :key="stock.symbol"><div class="stock-title"><span>{{ stock.symbol[0] }}</span><div><strong>{{ stock.symbol }}</strong><small>NASDAQ · 实时</small></div></div><h2>${{ stock.price.toFixed(2) }}</h2><em :class="stock.change_pct >= 0 ? 'positive' : 'negative'">{{ stock.change_pct >= 0 ? '+' : '' }}{{ stock.change_pct.toFixed(2) }}%</em><div class="bars"><i v-for="n in 13" :key="n" :style="{ height: (25 + ((n * 17 + stock.price) % 65)) + '%' }"></i></div></article></section>
+          <FinanceTerrain v-if="canRenderThree" :ticks="ticks" :connected="connected" :reduced-motion="reducedMotion" />
           <section class="grid main-grid"><article class="panel chart-panel"><div class="panel-head"><div><h3>多标的行情对比</h3><p>AAPL、TSLA 与 NVDA 实时价格趋势</p></div><span class="badge">Isolation Forest</span></div><div class="chart large"><svg viewBox="0 0 100 100" preserveAspectRatio="none"><g><line x1="0" y1="20" x2="100" y2="20"/><line x1="0" y1="52" x2="100" y2="52"/><line x1="0" y1="84" x2="100" y2="84"/></g><polyline v-for="line in chartLines" :key="line.symbol" :class="line.symbol.toLowerCase()" :points="line.points" fill="none" vector-effect="non-scaling-stroke"/></svg></div></article><article class="panel"><div class="panel-head"><div><h3>金融风险信号</h3><p>最新异常波动记录</p></div></div><div class="alert-list"><div v-for="a in alerts.filter(x => x.domain === 'finance')" :key="a.id" class="alert"><span class="high">{{ a.severity }}</span><div><strong>{{ a.title }}</strong><small>{{ a.detail }}</small></div><time>{{ a.time }}</time></div><div v-if="!alerts.some(x => x.domain === 'finance')" class="empty"><span>✓</span><strong>市场风险平稳</strong><p>当前没有异常波动</p></div></div></article></section>
         </template>
 
         <template v-else-if="active === 'ecommerce'">
           <section class="metrics three"><article><p>累计订单</p><h2>{{ (kpis.orders || 0).toLocaleString() }}</h2><small>演示周期累计</small></article><article><p>总交易额</p><h2>¥{{ Number(kpis.gmv || 0).toLocaleString(undefined, { maximumFractionDigits: 0 }) }}</h2><small>GMV 实时聚合</small></article><article><p>平均客单价</p><h2>¥{{ kpis.orders ? Math.round(kpis.gmv / kpis.orders).toLocaleString() : 0 }}</h2><small>交易额 / 订单数</small></article></section>
+          <CommerceWorld v-if="canRenderThree" :orders="orders" :connected="connected" :reduced-motion="reducedMotion" />
           <section class="grid commerce-grid"><article class="panel orders"><div class="panel-head"><div><h3>实时订单</h3><p>最新交易与异常检测结果</p></div><span class="badge">{{ orders.length }} 条动态</span></div><div class="table"><div class="table-head"><span>时间 / 订单号</span><span>商品</span><span>区域</span><span>金额</span><span>状态</span></div><div v-for="o in orders.slice(0, 10)" :key="o.order_code" :class="['table-row', { anomaly: o.is_anomaly }]"><span><small>{{ o.time }}</small><strong>{{ o.order_code }}</strong></span><span>{{ o.product }}</span><span>{{ o.region }}</span><span>¥{{ o.amount.toLocaleString() }}</span><em :class="{ danger: o.is_anomaly }">{{ o.is_anomaly ? '异常' : '正常' }}</em></div></div></article><article class="panel"><div class="panel-head"><div><h3>用户价值分层</h3><p>K-Means 聚类结果示例</p></div></div><div class="segments"><div v-for="user in [['U1090','高价值用户','¥2,890 · 13 笔订单',88],['U1012','活跃用户','¥1,680 · 8 笔订单',66],['U1048','潜力用户','¥590 · 4 笔订单',38]]" :key="user[0]"><span>{{ user[0] }}</span><strong>{{ user[1] }}</strong><p>{{ user[2] }}</p><div><i :style="{ width: user[3] + '%' }"></i></div><small>推荐：智能手表、无线耳机</small></div></div></article></section>
         </template>
 
