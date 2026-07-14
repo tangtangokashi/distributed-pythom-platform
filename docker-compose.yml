@@ -20,6 +20,15 @@ services:
       SIMULATION_AUTOSTART: "true"
       AUTH_SECRET: ${AUTH_SECRET:-local-docker-demo-secret-change-in-production}
       AUTH_ACCESS_TOKEN_MINUTES: ${AUTH_ACCESS_TOKEN_MINUTES:-1440}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
+      SMTP_USE_SSL: ${SMTP_USE_SSL:-true}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-false}
+      EMAIL_CODE_EXPIRE_MINUTES: ${EMAIL_CODE_EXPIRE_MINUTES:-10}
+      EMAIL_CODE_RESEND_SECONDS: ${EMAIL_CODE_RESEND_SECONDS:-60}
     depends_on:
       postgres:
         condition: service_healthy

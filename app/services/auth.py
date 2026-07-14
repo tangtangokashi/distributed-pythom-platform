@@ -46,6 +46,14 @@ def verify_password(password: str, encoded: str) -> bool:
         return False
 
 
+def hash_email_code(email: str, code: str) -> str:
+    return hmac.new(get_settings().auth_secret.encode(), f"{email}:{code}".encode(), hashlib.sha256).hexdigest()
+
+
+def verify_email_code(email: str, code: str, expected: str) -> bool:
+    return hmac.compare_digest(hash_email_code(email, code), expected)
+
+
 def create_access_token(user: User) -> str:
     settings = get_settings()
     now = datetime.now(timezone.utc)

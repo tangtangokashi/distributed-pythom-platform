@@ -29,6 +29,7 @@ const request = async (path, options = {}) => {
 }
 
 export const platformApi = {
+  sendEmailCode: (email) => request('/api/auth/email-code', { method: 'POST', body: JSON.stringify({ email }) }),
   register: (payload) => request('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) }),
   login: (payload) => request('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
   me: () => request('/api/auth/me'),

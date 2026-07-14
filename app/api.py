@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import re
+import secrets
+import smtplib
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, field_validator
@@ -9,9 +12,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import User
-from app.services.auth import create_access_token, get_current_user, hash_password, verify_password
+from app.config import get_settings
+from app.models import EmailVerification, User
+from app.services.auth import create_access_token, get_current_user, hash_email_code, hash_password, verify_email_code, verify_password
 from app.services.deepseek import explain
+from app.services.email import send_verification_email
 from app.services.ml import MLService
 from app.services.realtime import realtime
 
@@ -26,6 +31,7 @@ class RegisterRequest(BaseModel):
     name: str = Field(min_length=2, max_length=60)
     email: str = Field(min_length=5, max_length=255)
     password: str = Field(min_length=8, max_length=128)
+    verification_code: str = Field(pattern=r"^\d{6}$")
 
     @field_validator("name")
     @classmethod
@@ -49,6 +55,18 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=128)
 
 
+class EmailCodeRequest(BaseModel):
+    email: str = Field(min_length=5, max_length=255)
+
+    @field_validator("email")
+    @classmethod
+    def clean_email(cls, value: str) -> str:
+        value = value.strip().lower()
+        if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", value):
+            raise ValueError("请输入有效的邮箱地址")
+        return value
+
+
 def user_payload(user: User) -> dict:
     return {"id": user.id, "name": user.name, "email": user.email, "created_at": user.created_at.isoformat()}
 
@@ -62,8 +80,18 @@ def health() -> dict:
 def register(request: RegisterRequest, db: Session = Depends(get_db)) -> dict:
     if db.scalar(select(User).where(User.email == request.email)):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="该邮箱已经注册")
+    verification = db.scalar(select(EmailVerification).where(EmailVerification.email == request.email))
+    if not verification or verification.expires_at < datetime.utcnow():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="验证码不存在或已过期，请重新获取")
+    if verification.attempts >= 5:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="验证码错误次数过多，请重新获取")
+    if not verify_email_code(request.email, request.verification_code, verification.code_hash):
+        verification.attempts += 1
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="邮箱验证码错误")
     user = User(name=request.name, email=request.email, password_hash=hash_password(request.password))
     db.add(user)
+    db.delete(verification)
     try:
         db.commit()
     except IntegrityError as exc:
@@ -71,6 +99,37 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)) -> dict:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="该邮箱已经注册") from exc
     db.refresh(user)
     return {"access_token": create_access_token(user), "token_type": "bearer", "user": user_payload(user)}
+
+
+@router.post("/auth/email-code")
+def send_email_code(request: EmailCodeRequest, db: Session = Depends(get_db)) -> dict:
+    if db.scalar(select(User).where(User.email == request.email)):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="该邮箱已经注册")
+    settings = get_settings()
+    now = datetime.utcnow()
+    verification = db.scalar(select(EmailVerification).where(EmailVerification.email == request.email))
+    if verification and (now - verification.sent_at).total_seconds() < settings.email_code_resend_seconds:
+        wait = settings.email_code_resend_seconds - int((now - verification.sent_at).total_seconds())
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=f"请在 {wait} 秒后重新获取验证码")
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    try:
+        send_verification_email(request.email, code)
+    except (RuntimeError, OSError, smtplib.SMTPException) as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    if verification:
+        verification.code_hash = hash_email_code(request.email, code)
+        verification.attempts = 0
+        verification.sent_at = now
+        verification.expires_at = now + timedelta(minutes=settings.email_code_expire_minutes)
+    else:
+        db.add(EmailVerification(
+            email=request.email,
+            code_hash=hash_email_code(request.email, code),
+            expires_at=now + timedelta(minutes=settings.email_code_expire_minutes),
+            sent_at=now,
+        ))
+    db.commit()
+    return {"message": "验证码已发送，请检查邮箱", "expires_in": settings.email_code_expire_minutes * 60}
 
 
 @router.post("/auth/login")

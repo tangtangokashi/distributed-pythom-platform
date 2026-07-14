@@ -53,3 +53,14 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
+
+class EmailVerification(Base):
+    __tablename__ = "email_verifications"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    code_hash: Mapped[str] = mapped_column(String(64))
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    sent_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+

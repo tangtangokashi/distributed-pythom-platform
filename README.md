@@ -20,7 +20,23 @@ npm run dev
 
 浏览器访问 <http://127.0.0.1:5173>，接口文档访问 <http://127.0.0.1:8080/docs>。默认使用本地 SQLite；如需 DeepSeek，请在 `.env` 中填入 `DEEPSEEK_API_KEY`。
 
-首次打开网页时创建账户即可登录。密码仅保存 PBKDF2-SHA256 加盐哈希；生产部署前必须通过 `AUTH_SECRET` 配置一个足够长的随机令牌签名密钥。
+首次打开网页时需要先获取邮箱验证码，再创建账户登录。密码仅保存 PBKDF2-SHA256 加盐哈希；生产部署前必须通过 `AUTH_SECRET` 配置一个足够长的随机令牌签名密钥。
+
+### 邮箱验证码配置
+
+注册功能需要一个支持 SMTP 的邮箱。在 `.env` 中配置：
+
+```env
+SMTP_HOST=smtp.qq.com
+SMTP_PORT=465
+SMTP_USERNAME=your-account@qq.com
+SMTP_PASSWORD=邮箱服务生成的SMTP授权码
+SMTP_FROM_EMAIL=your-account@qq.com
+SMTP_USE_SSL=true
+SMTP_USE_TLS=false
+```
+
+QQ 邮箱需要在“设置 → 账户 → POP3/IMAP/SMTP”中开启 SMTP 并生成授权码；`SMTP_PASSWORD` 应填写授权码，而不是邮箱登录密码。其他邮箱可替换对应的 SMTP 地址、端口与 SSL/TLS 设置。验证码默认 10 分钟过期，60 秒后可重新发送。
 
 ### Docker 单机演示
 

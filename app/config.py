@@ -14,6 +14,15 @@ class Settings(BaseSettings):
     kafka_bootstrap_servers: str = "localhost:9092"
     auth_secret: str = "change-this-secret-before-production"
     auth_access_token_minutes: int = 1440
+    smtp_host: str | None = None
+    smtp_port: int = 465
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    smtp_from_email: str | None = None
+    smtp_use_ssl: bool = True
+    smtp_use_tls: bool = False
+    email_code_expire_minutes: int = 10
+    email_code_resend_seconds: int = 60
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
