@@ -14,7 +14,9 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': { target: 'http://127.0.0.1:8080', changeOrigin: true },
+      // Local FastAPI development server runs on port 8000.
+      // Docker uses Nginx to proxy to the same API service internally.
+      '/api': { target: 'http://127.0.0.1:8000', changeOrigin: true },
     },
   },
 })

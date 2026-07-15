@@ -64,3 +64,14 @@ class EmailVerification(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime)
     sent_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
+
+class PasswordChangeVerification(Base):
+    __tablename__ = "password_change_verifications"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, unique=True, index=True)
+    code_hash: Mapped[str] = mapped_column(String(64))
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    sent_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+

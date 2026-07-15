@@ -1,5 +1,7 @@
 # 真实数据目录
 
+当前已下载数据的来源、文件位置和页面用途见 [DATASETS.md](DATASETS.md)。
+
 本目录默认不包含大型数据集，避免将课程数据直接提交到 Git。
 
 1. 执行 `python ingestion/fetch_finance.py` 从 Yahoo Finance 下载 OHLCV 数据；

@@ -12,8 +12,14 @@ services:
   api:
     build:
       context: .
+    # Keep secrets outside the image while making DeepSeek settings available
+    # to the API container at runtime.
+    env_file:
+      - .env
     ports:
       - "8000:8000"
+    volumes:
+      - ./data:/app/data:ro
     environment:
       DATABASE_URL: postgresql+psycopg://platform:platform@postgres:5432/platform
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
